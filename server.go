@@ -55,11 +55,14 @@ func (s *Server) listenForConnections() {
 func (s *Server) handleClient(conn *net.UDPConn) {
 	defer conn.Close()
 
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, 512)
 	for {
-		_, addr, err := conn.ReadFromUDP(buffer)
+		n, addr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			fmt.Println("Error while reading incoming packet ", err)
+		}
+		if n > 512 {
+			fmt.Println("Exceed DNS Payload size")
 		}
 
 		// Lire l'identifiant
@@ -67,18 +70,24 @@ func (s *Server) handleClient(conn *net.UDPConn) {
 		requestHeader := dns.Create(headerSection)
 		requestHeader.Read()
 
-		question := buffer[12:]
-		fmt.Println("Question:", question)
+		questionData := buffer[12:]
+		// fmt.Println("Question:", questionData)
 
-		// Pour afficher le QNAME correctement
-		qname := ""
-		for i := 12; buffer[i] != 0; {
-			length := int(buffer[i])
-			i++
-			qname += string(buffer[i:i+length]) + "."
-			i += length
+		// // Pour afficher le QNAME correctement
+		// qname := ""
+		// for i := 12; buffer[i] != 0; {
+		// 	length := int(buffer[i])
+		// 	i++
+		// 	qname += string(buffer[i:i+length]) + "."
+		// 	i += length
+		// }
+		// fmt.Println("QNAME:", qname)
+		q := new(dns.Question)
+		question, err := q.Create(questionData)
+		if err != nil {
+			fmt.Println("Couldn't parse the question section of the DNS request:", err)
 		}
-		fmt.Println("QNAME:", qname)
+		question.Read()
 
 		responseHeader := dns.Header{
 			ID:      requestHeader.ID,
