@@ -5,3 +5,7 @@
 # Build
 
 dns-server-go
+
+# IDE dev files
+
+.vscode
