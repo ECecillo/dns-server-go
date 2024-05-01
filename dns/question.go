@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -91,4 +92,20 @@ func (q *Question) Create(buffer []byte) (*Question, *ParseError) {
 		Type:  binary.BigEndian.Uint16(buffer[offset+1 : offset+3]),
 		Class: binary.BigEndian.Uint16(buffer[offset+3 : offset+5]),
 	}, nil
+}
+
+func (q *Question) Write() []byte {
+	var buffer bytes.Buffer
+
+	labels := strings.Split(q.Name, ".")
+	for _, label := range labels {
+		buffer.WriteByte(byte(len(label))) // Écrit la longueur du label
+		buffer.WriteString(label)          // Écrit le label lui-même
+	}
+
+	// Écriture du Type et Class en BigEndian dans le buffer
+	binary.Write(&buffer, binary.BigEndian, q.Type)
+	binary.Write(&buffer, binary.BigEndian, q.Class)
+
+	return buffer.Bytes()
 }

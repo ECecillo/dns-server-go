@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"net"
@@ -71,24 +72,16 @@ func (s *Server) handleClient(conn *net.UDPConn) {
 		requestHeader.Read()
 
 		questionData := buffer[12:]
-		// fmt.Println("Question:", questionData)
 
-		// // Pour afficher le QNAME correctement
-		// qname := ""
-		// for i := 12; buffer[i] != 0; {
-		// 	length := int(buffer[i])
-		// 	i++
-		// 	qname += string(buffer[i:i+length]) + "."
-		// 	i += length
-		// }
-		// fmt.Println("QNAME:", qname)
 		q := new(dns.Question)
-		question, err := q.Create(questionData)
-		if err != nil {
+		question, questionError := q.Create(questionData)
+		if questionError != nil {
 			fmt.Println("Couldn't parse the question section of the DNS request:", err)
 		}
 		question.Read()
 
+		// Answer
+		var response bytes.Buffer
 		responseHeader := dns.Header{
 			ID:      requestHeader.ID,
 			QR:      0x01,
@@ -99,13 +92,30 @@ func (s *Server) handleClient(conn *net.UDPConn) {
 			RA:      0x00,
 			Z:       0x00,
 			RCODE:   0x00,
-			QDCOUNT: 0,
+			QDCOUNT: 1,
 			ANCOUNT: 0,
 			NSCOUNT: 0,
 			ARCOUNT: 0,
 		}
-		response := responseHeader.ToByte()
-		_, err = conn.WriteToUDP(response[:], addr)
+		respH := responseHeader.Write()
+		responseQuestion := dns.Question{
+			Name:  "\x0ccodecrafters\x02io",
+			Type:  1,
+			Class: 1,
+		}
+		respQ := responseQuestion.Write()
+
+		_, err = response.Write(respH[:])
+		if err != nil {
+			fmt.Println("Error while writing Header into the response buffer")
+		}
+
+		_, err = response.Write(respQ)
+		if err != nil {
+			fmt.Println("Error while writing Question into the response buffer")
+		}
+
+		_, err = conn.WriteToUDP(response.Bytes(), addr)
 		if err != nil {
 			fmt.Println(err)
 			return

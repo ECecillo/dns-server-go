@@ -70,7 +70,8 @@ func (h *Header) Read() {
 //                        E
 //+-------+-------+----------------------------------+---------+---------+---------+---------+
 
-func (h *Header) ToByte() [12]byte {
+// Write Header segment of a DNS request into an array of 12 bytes.
+func (h *Header) Write() [12]byte {
 	var buffer [12]byte
 
 	binary.BigEndian.PutUint16(buffer[:2], h.ID)
