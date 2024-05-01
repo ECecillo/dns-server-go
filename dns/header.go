@@ -26,6 +26,8 @@ type Header struct {
 }
 
 func (h *Header) Read() {
+	fmt.Println("+-------+-------+")
+	fmt.Println("      Header     ")
 	fmt.Println("+--------+---------+")
 	fmt.Println("|  Field |  Value  |")
 	fmt.Println("+---------+--------+")
