@@ -3,6 +3,7 @@ package dns
 import (
 	"encoding/binary"
 	"fmt"
+	"reflect"
 )
 
 // https://github.com/EmilHernvall/dnsguide/blob/b52da3b32b27c81e5c6729ac14fe01fef8b1b593/chapter1.md
@@ -10,7 +11,7 @@ import (
 // 12 bytes long
 // Intger in Big Endian
 type Header struct {
-	ID      uint16 // (16 bits) Package identifier : A random ID to query packets. Response packet must reply with the smae ID
+	ID      uint16 // (16 bits Big-Endian) Package identifier : A random ID to query packets. Response packet must reply with the smae ID
 	QR      byte   // (1 bit)   Query/Response Indicator : 1 for reply, 0 for a question packet.
 	OPCODE  byte   // (4 bits)  Operation Code : Specifies the kind of query in a message.
 	AA      byte   // (1 bit)   Authoritative Answer: 1 if the responding server "owns" the domain queried, i.e., it's authoritative.
@@ -19,44 +20,34 @@ type Header struct {
 	RA      byte   // (1 bit)   Recursion Available : Server sets this to 1 to indicate that recursion is available.
 	Z       byte   // (3 bits)  Reserved : Used by DNSSEC queries. At inception, it was reserved for future use.
 	RCODE   byte   // (4 bits)  Response code indicating the status of the response.
-	QDCOUNT uint16 // (16 bits) Question Count : Number of questions in the Question section.
-	ANCOUNT uint16 // (16 bits) Answer Record Count : Number of records in the Answer section.
-	NSCOUNT uint16 // (16 bits) Authority Record Count : Number of records in the Authority section.
-	ARCOUNT uint16 // (16 bits) Additional Record Count : Number of records in the Additional section.
+	QDCOUNT uint16 // (16 bits Big-Endian) Question Count : Number of questions in the Question section.
+	ANCOUNT uint16 // (16 bits Big-Endian) Answer Record Count : Number of records in the Answer section.
+	NSCOUNT uint16 // (16 bits Big-Endian) Authority Record Count : Number of records in the Authority section.
+	ARCOUNT uint16 // (16 bits Big-Endian) Additional Record Count : Number of records in the Additional section.
 }
 
+// TODO: Refactoriser et rendre la méthode privé.
 func (h *Header) Read() {
-	fmt.Println("+-------+-------+")
-	fmt.Println("      Header     ")
-	fmt.Println("+--------+---------+")
-	fmt.Println("|  Field |  Value  |")
-	fmt.Println("+---------+--------+")
-	fmt.Println("| ID      |", h.ID)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| QR      |", h.QR)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| OPCODE  |", h.OPCODE)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| AA      |", h.AA)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| TC      |", h.TC)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| RD      |", h.RD)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| RA      |", h.RA)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| Z       |", h.Z)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| RCODE   |", h.RCODE)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| QDCOUNT |", h.QDCOUNT)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| ANCOUNT |", h.ANCOUNT)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| NSCOUNT |", h.NSCOUNT)
-	fmt.Println("+---------+--------+")
-	fmt.Println("| ARCOUNT |", h.ARCOUNT)
-	fmt.Println("+---------+--------+")
+	v := reflect.ValueOf(*h)
+	t := v.Type()
+
+	fmt.Println("+----------------+----------------+")
+	fmt.Println("               Header              ")
+	fmt.Println("+----------------+----------------+")
+	fmt.Println("|     Field      |     Value     |")
+	fmt.Println("+----------------+----------------+")
+
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		value := v.Field(i)
+
+		if value.Kind() == reflect.Slice {
+			fmt.Printf("| %15s | %v \n", field.Name, string(value.Bytes()))
+		} else {
+			fmt.Printf("| %15s | %v \n", field.Name, value.Interface())
+		}
+		fmt.Println("+----------------+----------------+")
+	}
 }
 
 // +-------+-------+----------------------------------+---------+---------+---------+---------+
@@ -85,7 +76,7 @@ func (h *Header) Write() [12]byte {
 	return buffer
 }
 
-func Create(buffer [12]byte) *Header {
+func NewHeader(buffer [12]byte) *Header {
 	return &Header{
 		ID:      binary.BigEndian.Uint16(buffer[:2]),
 		QR:      buffer[2] >> 7,        // Shift 7 bits to the right to get the first bit.

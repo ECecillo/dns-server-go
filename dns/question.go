@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -30,26 +31,36 @@ func (e *ParseError) Error() string {
 func (e *ParseError) Unwrap() error { return e.Err }
 
 type Question struct {
-	Name  string // The domain name, encoded as a sequence of labels.
-	Type  uint16 // The record type. (1 for an A record, 5 for a CNAME record etc..., see RFC 1035 for a full list of types.)
-	Class uint16 // The class, in practice always set to 1.
+	Name  string // (Variable) The domain name, encoded as a sequence of labels.
+	Type  uint16 // (16 bits Big-Endian) The record type. (1 for an A record, 5 for a CNAME record etc..., see RFC 1035 for a full list of types.)
+	Class uint16 // (16 bits Big-Endian) The class, in practice always set to 1.
 }
 
+// TODO: Refactoriser et rendre la méthode privé.
 func (q *Question) Read() {
-	fmt.Println("+-------+-------+")
-	fmt.Println("     Question    ")
-	fmt.Println("+-------+-------+")
-	fmt.Println("| Field | Value |")
-	fmt.Println("+-------+-------+")
-	fmt.Println("| Name  |", q.Name)
-	fmt.Println("+-------+-------+")
-	fmt.Println("| Type  |", q.Type)
-	fmt.Println("+-------+-------+")
-	fmt.Println("| Class |", q.Class)
-	fmt.Println("+-------+-------+")
+	v := reflect.ValueOf(*q)
+	t := v.Type()
+
+	fmt.Println("+----------------+----------------+")
+	fmt.Println("             Question              ")
+	fmt.Println("+----------------+----------------+")
+	fmt.Println("|     Field      |     Value     |")
+	fmt.Println("+----------------+----------------+")
+
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		value := v.Field(i)
+
+		if value.Kind() == reflect.Slice {
+			fmt.Printf("| %15s | %v \n", field.Name, string(value.Bytes()))
+		} else {
+			fmt.Printf("| %15s | %v \n", field.Name, value.Interface())
+		}
+		fmt.Println("+----------------+----------------+")
+	}
 }
 
-func readLabel(data []byte, offset int) (string, int, *ParseError) {
+func ReadLabel(data []byte, offset int) (string, int, *ParseError) {
 	position := offset
 	labelLength := int(data[position])
 	if labelLength == 0 {
@@ -67,17 +78,26 @@ func readLabel(data []byte, offset int) (string, int, *ParseError) {
 	return label, nextOffset, nil
 }
 
-func (q *Question) Create(buffer []byte) (*Question, *ParseError) {
+func NewQuestion(buffer []byte) (*Question, *ParseError) {
+	var domain string
+
+	domain, offset := DecodeDomainToString(buffer)
+
+	return &Question{
+		Name:  domain,
+		Type:  binary.BigEndian.Uint16(buffer[offset+1 : offset+3]),
+		Class: binary.BigEndian.Uint16(buffer[offset+3 : offset+5]),
+	}, nil
+}
+
+func DecodeDomainToString(buffer []byte) (string, int) {
 	var labels []string
 	var domain string
 
 	offset := 0
 
 	for {
-		label, nextOffset, err := readLabel(buffer, offset)
-		if err != nil {
-			return nil, err
-		}
+		label, nextOffset, _ := ReadLabel(buffer, offset)
 		if label == "" {
 			break
 		}
@@ -87,25 +107,31 @@ func (q *Question) Create(buffer []byte) (*Question, *ParseError) {
 
 	domain = strings.Join(labels, ".")
 
-	return &Question{
-		Name:  domain,
-		Type:  binary.BigEndian.Uint16(buffer[offset+1 : offset+3]),
-		Class: binary.BigEndian.Uint16(buffer[offset+3 : offset+5]),
-	}, nil
+	return domain, offset
+}
+
+// TODO: Refactoriser et rendre la méthode privé.
+func EncodeDomainToBytes(domain string) []byte {
+	var buffer bytes.Buffer
+
+	labels := strings.Split(domain, ".")
+	for _, label := range labels {
+		buffer.WriteByte(byte(len(label)))
+		buffer.WriteString(label)
+	}
+	buffer.WriteByte(0x00)
+
+	return buffer.Bytes()
 }
 
 func (q *Question) Write() []byte {
 	var buffer bytes.Buffer
 
-	labels := strings.Split(q.Name, ".")
-	for _, label := range labels {
-		buffer.WriteByte(byte(len(label))) // Écrit la longueur du label
-		buffer.WriteString(label)          // Écrit le label lui-même
-	}
-
-	// Écriture du Type et Class en BigEndian dans le buffer
+	buffer.Write(EncodeDomainToBytes(q.Name))
 	binary.Write(&buffer, binary.BigEndian, q.Type)
 	binary.Write(&buffer, binary.BigEndian, q.Class)
+
+	fmt.Println("Question buffer: ", len(buffer.Bytes()))
 
 	return buffer.Bytes()
 }

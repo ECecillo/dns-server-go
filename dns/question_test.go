@@ -10,13 +10,13 @@ func TestReadLabel(t *testing.T) {
 	expectedLabel := "www"
 	expectedOffset := 4
 
-	label, offset, _ := readLabel(data, 0)
+	label, offset, _ := ReadLabel(data, 0)
 	if label != expectedLabel || offset != expectedOffset {
 		t.Errorf("readLabel failed, expected '%s' and %d, got '%s' and %d", expectedLabel, expectedOffset, label, offset)
 	}
 }
 
-func TestCreate(t *testing.T) {
+func TestParse(t *testing.T) {
 	data := []byte{0x03, 'w', 'w', 'w', 0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01}
 	expectedQuestion := &Question{
 		Name:  "www.google.com",
@@ -24,20 +24,31 @@ func TestCreate(t *testing.T) {
 		Class: 1,
 	}
 
-	q := new(Question)
-	question, _ := q.Create(data)
+	question, _ := NewQuestion(data)
 
 	if !reflect.DeepEqual(question, expectedQuestion) {
-		t.Errorf("Create failed, expected %+v, got %+v", expectedQuestion, question)
+		t.Errorf("Parse failed, expected %+v, got %+v", expectedQuestion, question)
 	}
 }
 
-func TestCreateWithIncompleteData(t *testing.T) {
+func TestReadLabelWithIncompleteData(t *testing.T) {
 	data := []byte{0x03, 'w', 'w', 'w', 0x06}
-	q := new(Question)
-	question, err := q.Create(data)
+	expectedLabel := ""
+	expectedOffset := -1
+	label, offset, err := ReadLabel(data, 0)
 
-	if err != nil && question != nil {
-		t.Errorf("Create with incomplete data should result in default Question, got %+v", question)
+	if err != nil && label != expectedLabel && offset != expectedOffset {
+		t.Errorf("Reading incomplete data should throw an error and an empty label, got %+v", label)
+	}
+}
+
+func TestEncodeDomainToBytes(t *testing.T) {
+	domain := "www.google.com"
+	expected := []byte{0x03, 'w', 'w', 'w', 0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00}
+
+	result := EncodeDomainToBytes(domain)
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("EncodeDomainToBytes failed, expected %v, got %v", expected, result)
 	}
 }

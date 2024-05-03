@@ -68,13 +68,11 @@ func (s *Server) handleClient(conn *net.UDPConn) {
 
 		// Lire l'identifiant
 		headerSection := [12]byte(buffer[:12])
-		requestHeader := dns.Create(headerSection)
+		requestHeader := dns.NewHeader(headerSection)
 		requestHeader.Read()
 
-		questionData := buffer[12:]
-
-		q := new(dns.Question)
-		question, questionError := q.Create(questionData)
+		questionData := buffer[12:33]
+		question, questionError := dns.NewQuestion(questionData)
 		if questionError != nil {
 			fmt.Println("Couldn't parse the question section of the DNS request:", err)
 		}
@@ -85,10 +83,10 @@ func (s *Server) handleClient(conn *net.UDPConn) {
 		responseHeader := dns.Header{
 			ID:      requestHeader.ID,
 			QR:      0x01,
-			OPCODE:  0x00,
+			OPCODE:  requestHeader.OPCODE,
 			AA:      0x00,
 			TC:      0x00,
-			RD:      0x00,
+			RD:      requestHeader.RD,
 			RA:      0x00,
 			Z:       0x00,
 			RCODE:   0x00,
@@ -98,21 +96,35 @@ func (s *Server) handleClient(conn *net.UDPConn) {
 			ARCOUNT: 0,
 		}
 		respH := responseHeader.Write()
-		responseQuestion := dns.Question{
-			Name:  "\x0ccodecrafters\x02io",
-			Type:  1,
-			Class: 1,
-		}
-		respQ := responseQuestion.Write()
-
 		_, err = response.Write(respH[:])
 		if err != nil {
 			fmt.Println("Error while writing Header into the response buffer")
 		}
 
+		responseQuestion := dns.Question{
+			Name:  "\x0ccodecrafters\x02io\x00",
+			Type:  1,
+			Class: 1,
+		}
+		respQ := responseQuestion.Write()
 		_, err = response.Write(respQ)
 		if err != nil {
 			fmt.Println("Error while writing Question into the response buffer")
+		}
+
+		responseAnswer := dns.Answer{
+			Name:     "codecrafters.io",
+			Type:     1,
+			Class:    1,
+			TTL:      60,
+			RDLENGTH: 4,
+			RDATA:    []byte("8.8.8.8"),
+		}
+		responseAnswer.Read()
+		respA := responseAnswer.Write()
+		_, err = response.Write(respA[:])
+		if err != nil {
+			fmt.Println("Error while writing Answer into the response buffer")
 		}
 
 		_, err = conn.WriteToUDP(response.Bytes(), addr)
